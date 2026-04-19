@@ -1,0 +1,11 @@
+venv/
+__pycache__/
+*.joblib
+.DS_Store
+*.exe
+g
+upload_data.csv
+uploaded_data.csv
+encoded_*.csv
+edges.csv
+synthetic_data.csv

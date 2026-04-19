@@ -1,0 +1,77 @@
+🧠 Starting ML Bias Detection & Mitigation Pipeline 🧠
+
+Loading real data from sample_bias_data.csv - Sheet1.csv...
+Encoding categorical column: Gender
+Encoding categorical column: Education
+
+🟢 Step 1: Preprocessing & Defining Variables
+🔵 Step 2 & 3: Training Baseline ML Model & Detecting Bias
+
+================ BEFORE MITIGATION ================
+Accuracy: 1.0000 | F1-Score: 1.0000
+SPD: -1.0000 ❌
+EOD: -1.0000 ❌
+⚠ Bias Detected: Statistical Parity Difference exceeds the allowed limit (0.1)
+
+--- Confusion Matrix per Group ---
+Group 0 (Disadvantaged):
+[[TN=1 FP=0]
+ [FN=0 TP=0]]
+
+Group 1 (Advantaged):
+[[TN=0 FP=0]
+ [FN=0 TP=3]]
+
+
+🛠️  Step 4: APPLYING BIAS MITIGATION TECHNIQUES 🛠️
+
+>>> Technique 1: FEATURE REMOVAL (Dropping sensitive attribute)
+
+================ AFTER MITIGATION (FEATURE REMOVAL) ================
+Accuracy: 0.5000 | F1-Score: 0.5000
+SPD: -0.3333 ❌
+EOD: -0.3333 ❌
+⚠ Bias Detected: Statistical Parity Difference exceeds the allowed limit (0.1)
+
+--- Confusion Matrix per Group ---
+Group 0 (Disadvantaged):
+[[TN=1 FP=0]
+ [FN=0 TP=0]]
+
+Group 1 (Advantaged):
+[[TN=0 FP=0]
+ [FN=2 TP=1]]
+
+>>> Technique 2: REWEIGHTING (Give higher importance to disadvantaged groups)
+
+================ AFTER MITIGATION (REWEIGHTING) ================
+Accuracy: 0.7500 | F1-Score: 0.8000
+SPD: -0.6667 ❌
+EOD: -0.6667 ❌
+⚠ Bias Detected: Statistical Parity Difference exceeds the allowed limit (0.1)
+
+--- Confusion Matrix per Group ---
+Group 0 (Disadvantaged):
+[[TN=1 FP=0]
+ [FN=0 TP=0]]
+
+Group 1 (Advantaged):
+[[TN=0 FP=0]
+ [FN=1 TP=2]]
+
+>>> Technique 3: RE-SAMPLING (Balancing dataset equal groups)
+
+================ AFTER MITIGATION (RE-SAMPLING) ================
+Accuracy: 1.0000 | F1-Score: 1.0000
+SPD: -1.0000 ❌
+EOD: -1.0000 ❌
+⚠ Bias Detected: Statistical Parity Difference exceeds the allowed limit (0.1)
+
+--- Confusion Matrix per Group ---
+Group 0 (Disadvantaged):
+[[TN=1 FP=0]
+ [FN=0 TP=0]]
+
+Group 1 (Advantaged):
+[[TN=0 FP=0]
+ [FN=0 TP=3]]

@@ -29,13 +29,31 @@ class Graph{
             cout << endl;
         }
     }
+
+    void writeEdgesToCSV(const string& filename) {
+        ofstream outFile(filename);
+        if (!outFile.is_open()) {
+            cerr << "Error opening " << filename << " for writing!" << endl;
+            return;
+        }
+        outFile << "source,target\n";
+        for (int i = 0; i < V; i++) {
+            for (int v : adjList[i]) {
+                if (i < v) { // Avoid duplicate edges for undirected graph
+                    outFile << i << "," << v << "\n";
+                }
+            }
+        }
+        outFile.close();
+        cout << "Edges successfully written to " << filename << endl;
+    }
 };
 
 // -------------------- CHECK NUMBER --------------------
 bool isNumber(string s) {
     if (s.empty()) return false;
     for (char c : s) {
-        if (!isdigit(c)) return false;
+        if (!isdigit(c) && c != '.') return false; // Allow decimals just in case
     }
     return true;
 }
@@ -48,10 +66,10 @@ bool isSimilar(vector<string>& a, vector<string>& b) {
     for (int i = 0; i < n; i++) {
         // numeric comparison
         if (isNumber(a[i]) && isNumber(b[i])) {
-            int x = stoi(a[i]);
-            int y = stoi(b[i]);
+            double x = stod(a[i]);
+            double y = stod(b[i]);
 
-            if (abs(x - y) < 10) score++;
+            if (abs(x - y) < 10.0) score++;
         }
         // categorical comparison
         else {
@@ -62,10 +80,15 @@ bool isSimilar(vector<string>& a, vector<string>& b) {
     return score > (n * 0.7); // threshold
 }
 
-int main(){
-    cout <<"Enter file name: ";
+int main(int argc, char* argv[]){
     string filename;
-    cin >> filename;
+    if (argc > 1) {
+        filename = argv[1];
+    } else {
+        cout << "Enter file name: ";
+        cin >> filename;
+    }
+    
    ifstream file(filename);
    if(!file.is_open()){
        cerr << "Error opening file!" << endl;
@@ -109,8 +132,8 @@ int main(){
         }
     }
 
-    // ---------- PRINT GRAPH ----------
-    g.display();
+    // ---------- WRITE TO CSV ----------
+    g.writeEdgesToCSV("edges.csv");
 
     return 0;
 }

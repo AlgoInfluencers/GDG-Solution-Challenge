@@ -7,7 +7,16 @@ from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 from imblearn.under_sampling import RandomUnderSampler
+import matplotlib.pyplot as plt
+import seaborn as sns
+import networkx as nx
+import joblib
+import subprocess
+import os
 import warnings
+
+# Set plot style
+sns.set_theme(style="whitegrid")
 
 # Ignore warnings for clean output
 warnings.filterwarnings('ignore')
@@ -98,7 +107,68 @@ def train_and_eval(X_train, y_train, X_test, y_test, A_test, sample_weight=None,
         
     print_confusion_matrices(y_test, y_pred, mask_A0, mask_A1)
     
-    return model
+    return model, accuracy, spd, eod
+
+def plot_metrics(results):
+    """Generates and saves a bar chart comparing Accuracy and Fairness (SPD)."""
+    print("\n📊 Generating Metrics Visualization...")
+    labels = list(results.keys())
+    accuracies = [res['accuracy'] for res in results.values()]
+    spds = [abs(res['spd']) for res in results.values()]
+
+    x = np.arange(len(labels))
+    width = 0.35
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    rects1 = ax.bar(x - width/2, accuracies, width, label='Accuracy', color='skyblue')
+    rects2 = ax.bar(x + width/2, spds, width, label='Abs(SPD) [Lower=Fairer]', color='salmon')
+
+    ax.set_ylabel('Scores')
+    ax.set_title('Accuracy vs Fairness Tradeoff (Before & After Mitigation)')
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, rotation=15, ha="right")
+    ax.legend()
+    # Draw a line for the acceptable SPD threshold (0.1)
+    ax.axhline(y=0.1, color='r', linestyle='--', alpha=0.7, label='Fairness Threshold (0.1)')
+
+    fig.tight_layout()
+    plt.savefig('metrics_tradeoff.png', dpi=300)
+    print("✅ Saved metrics_tradeoff.png")
+
+def analyze_graph(df, sensitive_col):
+    """Loads C++ edges.csv and visualizes structural bias."""
+    if not os.path.exists("edges.csv"):
+        print("⚠ edges.csv not found. Did the C++ script run correctly?")
+        return
+
+    print("\n🕸️ Analyzing Graph Network...")
+    try:
+        edges_df = pd.read_csv("edges.csv")
+        G = nx.from_pandas_edgelist(edges_df, source='source', target='target')
+    except Exception as e:
+        print(f"⚠ Error loading edges.csv: {e}")
+        return
+    
+    # We need nodelist mapping
+    node_colors = []
+    # If the nodes in edges.csv match the index of df
+    for node in G.nodes():
+        if node < len(df):
+            val = df.iloc[node][sensitive_col]
+            node_colors.append('red' if val == 0 else 'blue')
+        else:
+            node_colors.append('gray')
+
+    plt.figure(figsize=(8, 8))
+    pos = nx.spring_layout(G, seed=42)
+    # Red = Disadvantaged (0), Blue = Advantaged (1)
+    nx.draw_networkx_nodes(G, pos, node_size=30, node_color=node_colors, alpha=0.7)
+    nx.draw_networkx_edges(G, pos, alpha=0.2)
+    plt.title(f"Similarity Network Colored by {sensitive_col}\n(Red = Disadvantaged, Blue = Advantaged)")
+    plt.axis("off")
+    plt.savefig('structural_bias.png', dpi=300)
+    print("✅ Saved structural_bias.png")
+
 
 def compute_reweights(A, y):
     """
@@ -127,6 +197,8 @@ def main():
     args = parser.parse_args()
     
     print("🧠 Starting ML Bias Detection & Mitigation Pipeline 🧠\n")
+    
+    data_file = args.csv if args.csv else "data.csv"
     
     if args.csv:
         print(f"Loading real data from {args.csv}...")
@@ -166,8 +238,11 @@ def main():
     A_test = X_test[sensitive_col].values
 
     print("🔵 Step 2 & 3: Training Baseline ML Model & Detecting Bias")
+    results = {}
+    
     # Base model evaluates everything with the sensitive attribute still in the dataset.
-    train_and_eval(X_train, y_train, X_test, y_test, A_test, model_name="BEFORE MITIGATION")
+    model_base, acc, spd, eod = train_and_eval(X_train, y_train, X_test, y_test, A_test, model_name="BEFORE MITIGATION")
+    results['Baseline'] = {'accuracy': acc, 'spd': spd, 'eod': eod}
     
     print("\n\n🛠️  Step 4: APPLYING BIAS MITIGATION TECHNIQUES 🛠️")
     
@@ -177,14 +252,16 @@ def main():
     print("\n>>> Technique 1: FEATURE REMOVAL (Dropping sensitive attribute)")
     X_train_fr = X_train.drop(columns=[sensitive_col])
     X_test_fr = X_test.drop(columns=[sensitive_col])
-    train_and_eval(X_train_fr, y_train, X_test_fr, y_test, A_test, model_name="AFTER MITIGATION (FEATURE REMOVAL)")
+    model_fr, acc_fr, spd_fr, eod_fr = train_and_eval(X_train_fr, y_train, X_test_fr, y_test, A_test, model_name="AFTER MITIGATION (FEATURE REMOVAL)")
+    results['Feature Removal'] = {'accuracy': acc_fr, 'spd': spd_fr, 'eod': eod_fr}
     
     # -------------------------------------------------------------
     # MITIGATION 2: Reweighting
     # -------------------------------------------------------------
     print("\n>>> Technique 2: REWEIGHTING (Give higher importance to disadvantaged groups)")
     sample_weights = compute_reweights(A_train, y_train.values)
-    train_and_eval(X_train, y_train, X_test, y_test, A_test, sample_weight=sample_weights, model_name="AFTER MITIGATION (REWEIGHTING)")
+    model_rw, acc_rw, spd_rw, eod_rw = train_and_eval(X_train, y_train, X_test, y_test, A_test, sample_weight=sample_weights, model_name="AFTER MITIGATION (REWEIGHTING)")
+    results['Reweighting'] = {'accuracy': acc_rw, 'spd': spd_rw, 'eod': eod_rw}
     
     # -------------------------------------------------------------
     # MITIGATION 3: Re-sampling
@@ -201,7 +278,40 @@ def main():
     # Extract original 'y' from composite mapping
     y_resampled = y_resampled_comp.apply(lambda val: int(val.split("_")[1]))
     
-    train_and_eval(X_resampled, y_resampled, X_test, y_test, A_test, model_name="AFTER MITIGATION (RE-SAMPLING)")
+    model_rs, acc_rs, spd_rs, eod_rs = train_and_eval(X_resampled, y_resampled, X_test, y_test, A_test, model_name="AFTER MITIGATION (RE-SAMPLING)")
+    results['Re-sampling'] = {'accuracy': acc_rs, 'spd': spd_rs, 'eod': eod_rs}
+
+    # -------------------------------------------------------------
+    # Step 5: Visualizations & Saving
+    # -------------------------------------------------------------
+    plot_metrics(results)
+
+    # Export the best model (e.g. Reweighting model as it usually maintains feature richness)
+    print("\n💾 Exporting the Fairest Model (Reweighting)...")
+    joblib.dump(model_rw, 'fair_model.joblib')
+    joblib.dump(scaler, 'scaler.joblib')
+    print("✅ Saved fair_model.joblib and scaler.joblib")
+
+    # -------------------------------------------------------------
+    # Step 6: C++ Graph Interaction
+    # -------------------------------------------------------------
+    print("\n⚙️ Running C++ Similarity Graph Analytics...")
+    if args.csv: # Save the encoded csv so the cpp code can process it without categorical issues
+        encoded_csv = "encoded_" + data_file.split("/")[-1]
+        df.to_csv(encoded_csv, index=False)
+        target_csv = encoded_csv
+    else:
+        df.to_csv("synthetic_data.csv", index=False)
+        target_csv = "synthetic_data.csv"
+
+    # Make sure we don't block on C++ execution; we pass the file as arg
+    exe_name = "./g.exe" if os.name == "nt" or os.path.exists("./g.exe") else "./g"
+    try:
+        subprocess.run([exe_name, target_csv], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        print("✅ Computed edges via C++ script.")
+        analyze_graph(df, sensitive_col)
+    except Exception as e:
+        print(f"⚠ Could not run C++ graph tool: {e}")
 
 if __name__ == "__main__":
     main()
