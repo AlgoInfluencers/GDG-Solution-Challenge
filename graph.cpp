@@ -2,6 +2,7 @@
 #include<fstream>
 #include<sstream>
 #include<vector>
+#include<cmath>
 
 using namespace std;
 
@@ -69,7 +70,7 @@ bool isSimilar(vector<string>& a, vector<string>& b) {
             double x = stod(a[i]);
             double y = stod(b[i]);
 
-            if (abs(x - y) < 10.0) score++;
+            if (fabs(x - y) < 10.0) score++;
         }
         // categorical comparison
         else {
