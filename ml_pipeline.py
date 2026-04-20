@@ -297,15 +297,20 @@ def main():
     # -------------------------------------------------------------
     print("\n⚙️ Running C++ Similarity Graph Analytics...")
     if args.csv: # Save the encoded csv so the cpp code can process it without categorical issues
-        encoded_csv = "encoded_" + data_file.split("/")[-1]
+        encoded_csv = "encoded_" + os.path.basename(data_file)
         df.to_csv(encoded_csv, index=False)
         target_csv = encoded_csv
     else:
         df.to_csv("synthetic_data.csv", index=False)
         target_csv = "synthetic_data.csv"
 
-    # Make sure we don't block on C++ execution; we pass the file as arg
-    exe_name = "./g.exe" if os.name == "nt" or os.path.exists("./g.exe") else "./g"
+    # Robust cross-platform execution path handling
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    if os.name == "nt":
+        exe_name = os.path.join(base_dir, "g.exe")
+    else:
+        exe_name = os.path.join(base_dir, "g.exe") if os.path.exists(os.path.join(base_dir, "g.exe")) else os.path.join(base_dir, "g")
+
     try:
         subprocess.run([exe_name, target_csv], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         print("✅ Computed edges via C++ script.")

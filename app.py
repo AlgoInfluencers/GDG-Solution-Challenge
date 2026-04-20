@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import subprocess
 import os
+import sys
 
 st.set_page_config(page_title="Fairness Pipeline", layout="wide", page_icon="⚖️")
 
@@ -38,11 +39,8 @@ if st.sidebar.button("🚀 Run Fairness Analysis", type="primary"):
 
         # Run pipeline
         try:
-            # Use the correct python binary from the assumed environment (if accessible, else fallback)
-            # sys.executable is usually safer, but since the user has a venv, we can assume standard run
-            python_cmd = "python"
-            if os.path.exists("venv/bin/python"):
-                python_cmd = "venv/bin/python"
+            # Safely use the exact python exe running Streamlit (works on Win/Mac/Linux)
+            python_cmd = sys.executable
 
             cmd = [python_cmd, "ml_pipeline.py", "--csv", csv_path, "--target_col", target_col, "--sensitive_col", sensitive_col]
             
